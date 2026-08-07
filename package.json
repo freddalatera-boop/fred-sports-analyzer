@@ -1,0 +1,44 @@
+{
+  "name": "fred-sports-analyzer",
+  "version": "0.1.0",
+  "description": "Analisador esportivo explicável e controle de banca para Windows",
+  "main": "src/main.js",
+  "author": "Fred Assistência Técnica",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "br.com.fredassistencia.sportsanalyzer",
+    "productName": "Fred Sports Analyzer",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Fred Sports Analyzer"
+    }
+  }
+}
