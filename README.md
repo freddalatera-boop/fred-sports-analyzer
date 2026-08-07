@@ -1,35 +1,47 @@
 # Fred Sports Analyzer
 
-Aplicativo instalado para Windows, em português do Brasil, voltado à análise esportiva explicável, montagem de bilhetes e controle de banca.
+Aplicativo instalado para Windows, em português do Brasil, voltado à consulta de jogos atuais, odds recebidas por API, montagem de bilhetes e controle de banca.
 
 > Probabilidades não garantem resultados. Uso exclusivo para maiores de 18 anos.
 
-## O que já funciona
+## Versão 0.2.0 — fonte real
 
-- Painel com partidas e análises demonstrativas.
+A versão 0.2.0 não apresenta jogos de exemplo como se fossem atuais. Sem uma fonte conectada, a tela fica vazia e informa claramente que a API precisa ser configurada.
+
+Para conectar:
+
+1. Crie uma conta gratuita em https://dashboard.api-football.com/register
+2. No painel da API-Sports, copie sua API Key.
+3. Abra **Configurações** no Fred Sports Analyzer.
+4. Cole a chave em **Chave API-Sports**.
+5. Clique em **Salvar e conectar**.
+
+A chave é criptografada no próprio Windows e não é gravada neste repositório.
+
+O plano gratuito da API-Sports oferece 100 consultas por dia. O aplicativo consulta jogos e odds de hoje e amanhã. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
+
+## Recursos
+
+- Jogos atuais e próximos por data real.
+- Odds disponíveis pela fonte conectada.
 - Busca e filtro por competição.
-- Fatores favoráveis e pontos de atenção.
-- Montagem automática para odds-alvo 2, 3, 5, 10 e 20.
-- Bilhete com odd combinada, confiança estimada e nível de risco.
+- Explicação da probabilidade implícita de mercado.
+- Montagem automática para odds-alvo.
 - Controle de banca, depósitos, apostas e resultados.
 - Limite por aposta e limite diário de perda.
 - Histórico, exportação e importação de backup.
-- Dados salvos no próprio computador.
+- Dados financeiros salvos no próprio computador.
 - Instalador do Windows com atalho na área de trabalho.
 
-## Como baixar o instalador
+## Download
 
-1. Abra a aba **Actions** deste repositório.
-2. Entre na execução mais recente chamada **Gerar instalador Windows**.
-3. Aguarde aparecer o sinal verde.
-4. Em **Artifacts**, baixe **Fred-Sports-Analyzer-Windows**.
-5. Extraia o arquivo ZIP e execute o instalador `.exe`.
+Abra a página de versões:
+
+https://github.com/freddalatera-boop/fred-sports-analyzer/releases
+
+Em **Assets/Ativos**, baixe o instalador mais recente.
 
 O instalador ainda não possui assinatura digital comercial. O Windows pode exibir um aviso do SmartScreen; confira que o arquivo veio deste repositório.
-
-## Próxima etapa: dados reais
-
-A versão 0.1.0 usa dados fictícios claramente identificados para permitir testes sem inventar informações atuais. A integração real será adicionada por uma camada protegida, usando uma API de estatísticas e uma API licenciada de odds. Chaves privadas nunca devem ser gravadas neste repositório público.
 
 ## Desenvolvimento
 
