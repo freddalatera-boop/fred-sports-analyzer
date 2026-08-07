@@ -11,7 +11,7 @@ on:
       - ".github/workflows/build-windows.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -46,3 +46,11 @@ jobs:
             dist/*.yml
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publicar na página de versões
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "build-${{ github.run_number }}"
+          gh release create $tag "dist/Fred Sports Analyzer Setup 0.1.0.exe" --target "${{ github.sha }}" --title "Fred Sports Analyzer 0.1.0" --notes "Instalador automático para Windows 64 bits."
