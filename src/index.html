@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fred Sports Analyzer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">F</div>
+        <div><strong>FRED</strong><span>SPORTS ANALYZER</span></div>
+      </div>
+      <nav id="nav">
+        <button class="nav-item active" data-page="overview"><span>⌂</span> Visão geral</button>
+        <button class="nav-item" data-page="games"><span>⚽</span> Jogos</button>
+        <button class="nav-item" data-page="analyses"><span>◆</span> Análises</button>
+        <button class="nav-item" data-page="ticket"><span>▤</span> Meu bilhete <b id="ticketCount">0</b></button>
+        <button class="nav-item" data-page="bank"><span>R$</span> Banca e histórico</button>
+        <button class="nav-item" data-page="settings"><span>⚙</span> Configurações</button>
+        <button class="nav-item" data-page="about"><span>ⓘ</span> Sobre</button>
+      </nav>
+      <div class="responsible-card">
+        <strong>Jogue com responsabilidade</strong>
+        <span>Defina limites e nunca aposte valores necessários para suas despesas.</span>
+        <small>18+</small>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">CENTRAL DE ANÁLISE</p>
+          <h1 id="pageTitle">Visão geral</h1>
+        </div>
+        <div class="top-actions">
+          <span class="demo-pill">● MODO DEMONSTRAÇÃO</span>
+          <span id="clock" class="clock"></span>
+        </div>
+      </header>
+      <div id="notice" class="notice hidden"></div>
+      <section id="page" class="page"></section>
+    </main>
+  </div>
+
+  <template id="gameCardTemplate">
+    <article class="game-card"></article>
+  </template>
+
+  <input id="importFile" type="file" accept="application/json" hidden>
+  <script src="app.js"></script>
+</body>
+</html>
