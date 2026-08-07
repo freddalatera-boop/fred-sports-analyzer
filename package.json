@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "electron": "^37.3.1",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "br.com.fredassistencia.sportsanalyzer",
