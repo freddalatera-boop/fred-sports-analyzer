@@ -1,4 +1,4 @@
-const games = [
+const demoGames = [
   {
     id: 'g1', competition: 'Brasileirão Série A', country: 'Brasil', time: '16:00',
     home: 'Atlético-MG', away: 'Fluminense', homeForm: ['W','W','D','W','L'], awayForm: ['D','L','W','D','W'],
@@ -42,6 +42,10 @@ const games = [
     risks: ['Critério do árbitro altera fortemente o mercado.', 'Escala de arbitragem não confirmada.']
   }
 ];
+
+let games = [];
+let sourceMode = 'unconfigured';
+let lastSync = null;
 
 const STORAGE_KEY = 'fred-sports-analyzer-v1';
 const defaultState = {
@@ -113,20 +117,22 @@ function tagClass(confidence) {
 
 function gameCard(game, compact) {
   const inTicket = state.ticket.some(function(item) { return item.id === game.id; });
+  const forms = game.homeForm && game.homeForm.length;
+  let marketHtml = '<div class="market-row"><div class="market-name"><strong>Odds não disponíveis</strong><span>A fonte não retornou um mercado compatível para este jogo.</span></div><div class="odd-box"><small>FONTE</small><strong style="font-size:11px">API</strong></div><div class="confidence"><small>STATUS</small><strong style="font-size:11px;color:var(--muted)">AGUARDANDO</strong></div><button class="btn small" disabled>Sem análise</button></div>';
+  if (Number(game.odd) > 1) {
+    marketHtml = '<div class="market-row">' +
+      '<div class="market-name"><strong>' + e(game.market) + '</strong><span>Melhor cotação recebida: ' + e(game.bookmaker) + '</span></div>' +
+      '<div class="odd-box"><small>ODD</small><strong>' + Number(game.odd).toFixed(2) + '</strong></div>' +
+      '<div class="confidence"><small>CONF. MERCADO</small><strong>' + game.confidence + '%</strong></div>' +
+      '<button class="btn small ' + (inTicket ? '' : 'primary') + '" data-action="' + (inTicket ? 'remove' : 'add') + '" data-id="' + game.id + '">' + (inTicket ? 'Remover' : '+ Bilhete') + '</button></div>';
+  }
   return '<article class="game-card">' +
-    '<div class="game-top"><span>' + e(game.competition) + '</span><span>' + e(game.country) + ' • dados demonstrativos</span></div>' +
-    '<div class="teams">' +
-      '<div class="team">' + e(game.home) + formHtml(game.homeForm) + '</div>' +
-      '<div class="kickoff">' + e(game.time) + '</div>' +
-      '<div class="team">' + e(game.away) + formHtml(game.awayForm) + '</div>' +
-    '</div>' +
-    '<div class="market-row">' +
-      '<div class="market-name"><strong>' + e(game.market) + '</strong><span>Melhor cotação: ' + e(game.bookmaker) + '</span></div>' +
-      '<div class="odd-box"><small>ODD</small><strong>' + game.odd.toFixed(2) + '</strong></div>' +
-      '<div class="confidence"><small>CONFIANÇA</small><strong>' + game.confidence + '%</strong></div>' +
-      '<button class="btn small ' + (inTicket ? '' : 'primary') + '" data-action="' + (inTicket ? 'remove' : 'add') + '" data-id="' + game.id + '">' + (inTicket ? 'Remover' : '+ Bilhete') + '</button>' +
-    '</div>' +
-    (compact ? '' : '<div style="margin-top:12px"><span class="tag ' + tagClass(game.confidence) + '">' + riskLabel(game.confidence) + '</span></div>') +
+    '<div class="game-top"><span>' + e(game.competition) + '</span><span>' + e(game.country) + ' • ' + e(game.source || 'fonte local') + '</span></div>' +
+    '<div class="teams"><div class="team">' + e(game.home) + (forms ? formHtml(game.homeForm) : '') + '</div>' +
+    '<div class="kickoff">' + e(game.time) + '</div>' +
+    '<div class="team">' + e(game.away) + (forms ? formHtml(game.awayForm) : '') + '</div></div>' +
+    marketHtml +
+    (compact || !game.odd ? '' : '<div style="margin-top:12px"><span class="tag ' + tagClass(game.confidence) + '">' + riskLabel(game.confidence) + '</span></div>') +
   '</article>';
 }
 
@@ -140,15 +146,94 @@ function miniTicket() {
   '<div class="ticket-total"><div><small>ODD TOTAL</small><strong>' + odd.toFixed(2) + '</strong></div><div><small>CHANCE EST.</small><strong>' + pct(confidence) + '</strong></div><div><small>RISCO</small><strong>' + riskLabel(confidence) + '</strong></div></div>';
 }
 
+function updateSourcePill() {
+  const pill = document.getElementById('sourcePill');
+  if (!pill) return;
+  if (sourceMode === 'live') {
+    pill.textContent = '● DADOS REAIS';
+    pill.style.color = 'var(--green)';
+    pill.style.borderColor = 'rgba(41,226,125,.38)';
+  } else if (sourceMode === 'demo') {
+    pill.textContent = '● MODO DEMONSTRAÇÃO';
+    pill.style.color = 'var(--yellow)';
+  } else {
+    pill.textContent = '● FONTE NÃO CONECTADA';
+    pill.style.color = 'var(--red)';
+  }
+}
+
+function sourceBanner() {
+  if (sourceMode === 'live') {
+    return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da API-Sports. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.</div>';
+  }
+  if (sourceMode === 'demo') {
+    return '<div class="warning-box" style="margin-bottom:18px"><strong>Modo demonstração:</strong> os confrontos abaixo são exemplos e não representam os jogos atuais. Vá em Configurações para conectar a fonte real.</div>';
+  }
+  return '<div class="warning-box" style="margin-bottom:18px"><strong>Fonte não conectada:</strong> nenhum jogo será inventado. Configure gratuitamente a API-Sports para carregar as partidas atuais. <button class="btn small primary" style="margin-left:10px" data-go="settings">Configurar agora</button></div>';
+}
+
+async function syncLiveData(showMessage) {
+  if (!window.sportsApi) {
+    sourceMode = 'unconfigured';
+    games = [];
+    setPage(state.activePage || 'overview');
+    return;
+  }
+  try {
+    const status = await window.sportsApi.status();
+    if (!status.configured) {
+      sourceMode = 'unconfigured';
+      games = [];
+      setPage(state.activePage || 'overview');
+      return;
+    }
+    if (showMessage) notify('Buscando jogos e odds atuais...');
+    const result = await window.sportsApi.sync();
+    games = Array.isArray(result.games) ? result.games : [];
+    sourceMode = 'live';
+    lastSync = result.updatedAt;
+    setPage(state.activePage || 'overview');
+    notify(games.length ? games.length + ' jogos atuais carregados.' : 'A fonte não retornou jogos futuros para hoje e amanhã.', !games.length);
+  } catch (error) {
+    sourceMode = 'unconfigured';
+    games = [];
+    setPage(state.activePage || 'settings');
+    notify(error && error.message ? error.message : 'Não foi possível consultar a fonte esportiva.', true);
+  }
+}
+
+async function saveApiKey() {
+  const input = document.getElementById('apiKey');
+  const key = input ? input.value.trim() : '';
+  if (!key) return notify('Cole a chave da API-Sports.', true);
+  try {
+    await window.sportsApi.saveKey(key);
+    input.value = '';
+    notify('Chave salva com criptografia. Buscando dados atuais...');
+    await syncLiveData(false);
+  } catch (error) {
+    notify(error && error.message ? error.message : 'Não foi possível salvar a chave.', true);
+  }
+}
+
+async function clearApiKey() {
+  if (!window.sportsApi) return;
+  await window.sportsApi.clearKey();
+  sourceMode = 'unconfigured';
+  games = [];
+  setPage('settings');
+  notify('Fonte desconectada.');
+}
+
 function renderOverview() {
   const pending = state.history.filter(function(item) { return item.status === 'Pendente'; }).length;
   const settled = state.history.filter(function(item) { return item.status !== 'Pendente'; });
   const wins = settled.filter(function(item) { return item.status === 'Ganha'; }).length;
   const hitRate = settled.length ? wins / settled.length * 100 : 0;
-  return '<div class="hero"><div><p class="eyebrow">ANÁLISE EXPLICÁVEL</p><h2>Boa leitura vale mais que palpite.</h2><p>Compare informações, veja os riscos e monte bilhetes com critérios claros. Esta versão usa dados fictícios para você testar todas as funções.</p></div><div class="hero-actions"><button class="btn primary" data-go="games">Ver jogos do dia</button><button class="btn" data-action="auto" data-target="3">Montar odd 3</button></div></div>' +
+  return sourceBanner() + '<div class="hero"><div><p class="eyebrow">ANÁLISE EXPLICÁVEL</p><h2>Boa leitura vale mais que palpite.</h2><p>Compare informações, veja os riscos e monte bilhetes com critérios claros. Quando a fonte está conectada, jogos e cotações são carregados pela data atual.</p></div><div class="hero-actions"><button class="btn primary" data-go="games">Ver jogos do dia</button><button class="btn" data-action="auto" data-target="3">Montar odd 3</button></div></div>' +
     '<div class="stats-grid">' +
       statCard('Banca atual', money(state.bank), 'Salva neste computador') +
-      statCard('Jogos analisados', String(games.length), 'Modo demonstração') +
+      statCard('Jogos carregados', String(games.length), sourceMode === 'live' ? 'Fonte API-Sports' : 'Sem fonte real') +
       statCard('Taxa de acerto', pct(hitRate), settled.length + ' apostas finalizadas') +
       statCard('Apostas pendentes', String(pending), 'Acompanhe no histórico') +
     '</div>' +
@@ -163,18 +248,21 @@ function statCard(label, value, detail) {
 
 function renderGames() {
   const competitions = Array.from(new Set(games.map(function(g) { return g.competition; })));
-  return '<div class="panel"><div class="panel-header"><div><h2>Jogos disponíveis</h2><p>Atualização demonstrativa • horário de Brasília</p></div><span class="tag yellow">SEM DADOS AO VIVO</span></div>' +
+  const content = games.length ? games.map(function(g) { return gameCard(g,false); }).join('') : '<div class="empty">Nenhum jogo atual carregado. Conecte a fonte real em Configurações.</div>';
+  return sourceBanner() + '<div class="panel"><div class="panel-header"><div><h2>Jogos atuais e próximos</h2><p>Hoje e amanhã • horário de Brasília</p></div><span class="tag ' + (sourceMode === 'live' ? 'green' : 'yellow') + '">' + (sourceMode === 'live' ? 'FONTE REAL' : 'SEM FONTE') + '</span></div>' +
     '<div class="filters"><input class="input" id="gameSearch" placeholder="Buscar time ou competição"><select id="competitionFilter"><option value="">Todas as competições</option>' +
-    competitions.map(function(c) { return '<option value="' + e(c) + '">' + e(c) + '</option>'; }).join('') +
-    '</select></div><div class="games-list" id="gamesList">' + games.map(function(g) { return gameCard(g,false); }).join('') + '</div></div>';
+    competitions.map(function(name) { return '<option value="' + e(name) + '">' + e(name) + '</option>'; }).join('') +
+    '</select>' + (sourceMode === 'live' ? '<button class="btn" data-action="sync-api">Atualizar agora</button>' : '') + '</div><div class="games-list" id="gamesList">' + content + '</div></div>';
 }
 
 function renderAnalyses() {
-  return '<div class="hero"><div><p class="eyebrow">MOTOR DE ANÁLISE</p><h2>Critérios visíveis, sem promessa de resultado.</h2><p>A confiança combina forma, mando, produção ofensiva e estabilidade do mercado. Notícias e escalações só serão mostradas quando vierem de uma fonte conectada.</p></div><div class="target-row">' +
+  const analyzed = games.filter(function(game) { return Number(game.odd) > 1; });
+  if (!analyzed.length) return sourceBanner() + '<div class="empty">Não há análises com odds reais disponíveis neste momento.</div>';
+  return sourceBanner() + '<div class="hero"><div><p class="eyebrow">MOTOR DE ANÁLISE</p><h2>Mercado real, sem promessa de resultado.</h2><p>A confiança inicial é derivada da probabilidade implícita da cotação. Estatísticas aprofundadas serão incorporadas apenas quando a fonte as fornecer.</p></div><div class="target-row">' +
     [2,3,5,10,20].map(function(target) { return '<button class="target" data-action="auto" data-target="' + target + '">Montar odd ' + target + '</button>'; }).join('') +
-    '</div></div><div class="section-title"><div><h2>Análises recomendadas</h2><p>Nunca trate uma recomendação como garantia.</p></div></div>' +
-    games.slice().sort(function(a,b) { return b.confidence-a.confidence; }).map(function(game) {
-      return '<article class="analysis-card"><div class="analysis-head"><div><h3>' + e(game.home) + ' × ' + e(game.away) + '</h3><p>' + e(game.market) + ' • odd ' + game.odd.toFixed(2) + ' em ' + e(game.bookmaker) + '</p></div><span class="tag ' + tagClass(game.confidence) + '">' + game.confidence + '% confiança</span></div><div class="meter"><span style="width:' + game.confidence + '%"></span></div><div class="split"><div><strong style="font-size:11px;color:var(--green)">Fatores favoráveis</strong><ul class="evidence">' + game.evidence.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul></div><div><strong style="font-size:11px;color:var(--yellow)">Pontos de atenção</strong><ul class="evidence">' + game.risks.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul></div></div><button class="btn small primary" data-action="add" data-id="' + game.id + '">Adicionar ao bilhete</button></article>';
+    '</div></div><div class="section-title"><div><h2>Análises disponíveis</h2><p>Odds e jogos recebidos da fonte conectada.</p></div></div>' +
+    analyzed.slice().sort(function(a,b) { return b.confidence-a.confidence; }).map(function(game) {
+      return '<article class="analysis-card"><div class="analysis-head"><div><h3>' + e(game.home) + ' × ' + e(game.away) + '</h3><p>' + e(game.market) + ' • odd ' + Number(game.odd).toFixed(2) + ' em ' + e(game.bookmaker) + '</p></div><span class="tag ' + tagClass(game.confidence) + '">' + game.confidence + '% mercado</span></div><div class="meter"><span style="width:' + game.confidence + '%"></span></div><div class="split"><div><strong style="font-size:11px;color:var(--green)">Evidências disponíveis</strong><ul class="evidence">' + game.evidence.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul></div><div><strong style="font-size:11px;color:var(--yellow)">Pontos de atenção</strong><ul class="evidence">' + game.risks.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul></div></div><button class="btn small primary" data-action="add" data-id="' + game.id + '">Adicionar ao bilhete</button></article>';
     }).join('');
 }
 
@@ -229,9 +317,12 @@ function transactionsTable() {
 }
 
 function renderSettings() {
-  return '<div class="split"><div class="panel"><div class="panel-header"><div><h2>Limites responsáveis</h2><p>O sistema avisa quando um valor ultrapassa seus limites.</p></div></div><div class="form-grid"><div class="field"><label>LIMITE POR APOSTA</label><input id="maxStake" class="input" type="number" min="1" value="' + state.limits.maxStake + '"></div><div class="field"><label>LIMITE DIÁRIO DE PERDA</label><input id="dailyLoss" class="input" type="number" min="1" value="' + state.limits.dailyLoss + '"></div></div><button class="btn primary" style="margin-top:14px" data-action="save-limits">Salvar limites</button></div>' +
-    '<aside class="panel"><div class="panel-header"><div><h3>Backup dos dados</h3><p>Leve seu histórico para outro computador.</p></div></div><button class="btn" style="width:100%;margin-bottom:9px" data-action="export">Exportar backup</button><button class="btn" style="width:100%;margin-bottom:9px" data-action="import">Importar backup</button><button class="btn danger" style="width:100%" data-action="reset">Apagar dados locais</button></aside></div>' +
-    '<div class="panel" style="margin-top:18px"><div class="panel-header"><div><h2>Fontes esportivas</h2><p>As chaves nunca serão gravadas no código público.</p></div><span class="tag yellow">NÃO CONFIGURADO</span></div><div class="warning-box">A versão atual trabalha com dados demonstrativos. A integração real será feita em uma camada protegida, usando API-Football/API-Sports e uma fonte licenciada de odds. Quando um dado não existir, o programa mostrará “não disponível” em vez de inventá-lo.</div></div>';
+  return '<div class="panel" style="margin-bottom:18px"><div class="panel-header"><div><h2>Fonte esportiva real</h2><p>Jogos e odds atuais pela API-Sports.</p></div><span class="tag ' + (sourceMode === 'live' ? 'green' : 'yellow') + '">' + (sourceMode === 'live' ? 'CONECTADA' : 'NÃO CONFIGURADA') + '</span></div>' +
+    '<div class="warning-box">Crie uma chave gratuita em <strong>dashboard.api-football.com</strong>. Ela será criptografada no Windows e nunca será enviada ao GitHub.</div>' +
+    '<div class="field" style="margin-top:14px"><label>CHAVE API-SPORTS</label><input id="apiKey" class="input" type="password" autocomplete="off" placeholder="Cole sua chave aqui"></div>' +
+    '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" data-action="save-api">Salvar e conectar</button><button class="btn" data-action="sync-api">Atualizar dados</button><button class="btn danger" data-action="clear-api">Desconectar</button><button class="btn" data-action="demo-source">Testar demonstração</button></div></div>' +
+    '<div class="split"><div class="panel"><div class="panel-header"><div><h2>Limites responsáveis</h2><p>O sistema impede valores acima dos limites definidos.</p></div></div><div class="form-grid"><div class="field"><label>LIMITE POR APOSTA</label><input id="maxStake" class="input" type="number" min="1" value="' + state.limits.maxStake + '"></div><div class="field"><label>LIMITE DIÁRIO DE PERDA</label><input id="dailyLoss" class="input" type="number" min="1" value="' + state.limits.dailyLoss + '"></div></div><button class="btn primary" style="margin-top:14px" data-action="save-limits">Salvar limites</button></div>' +
+    '<aside class="panel"><div class="panel-header"><div><h3>Backup dos dados</h3><p>Leve seu histórico para outro computador.</p></div></div><button class="btn" style="width:100%;margin-bottom:9px" data-action="export">Exportar backup</button><button class="btn" style="width:100%;margin-bottom:9px" data-action="import">Importar backup</button><button class="btn danger" style="width:100%" data-action="reset">Apagar dados locais</button></aside></div>';
 }
 
 function renderAbout() {
@@ -240,6 +331,7 @@ function renderAbout() {
 
 function setPage(page) {
   state.activePage = page;
+  updateSourcePill();
   saveState();
   document.querySelectorAll('.nav-item').forEach(function(button) {
     button.classList.toggle('active', button.dataset.page === page);
@@ -256,7 +348,7 @@ function updateTicketCount() {
 
 function addToTicket(id) {
   const game = games.find(function(item) { return item.id === id; });
-  if (!game) return;
+  if (!game || !Number(game.odd)) return notify('Este jogo ainda não possui uma odd real disponível.', true);
   if (state.ticket.some(function(item) { return item.id === id; })) return notify('Esta seleção já está no bilhete.', true);
   if (state.ticket.some(function(item) { return item.id === game.id; })) return notify('Já existe uma seleção deste jogo.', true);
   state.ticket.push(game);
@@ -272,7 +364,7 @@ function removeFromTicket(id) {
 }
 
 function autoBuild(target) {
-  const sorted = games.slice().filter(function(g) { return g.confidence >= 50; }).sort(function(a,b) { return b.confidence-a.confidence; });
+  const sorted = games.slice().filter(function(g) { return Number(g.odd) > 1 && g.confidence >= 50; }).sort(function(a,b) { return b.confidence-a.confidence; });
   const selected = [];
   for (const item of sorted) {
     selected.push(item);
@@ -389,6 +481,16 @@ document.getElementById('page').addEventListener('click', function(event) {
       state.limits = { maxStake:maxStake, dailyLoss:dailyLoss }; saveState(); notify('Limites salvos.');
     } else notify('Informe limites maiores que zero.', true);
   }
+  if (action === 'save-api') saveApiKey();
+  if (action === 'sync-api') syncLiveData(true);
+  if (action === 'clear-api') clearApiKey();
+  if (action === 'demo-source') {
+    games = demoGames;
+    sourceMode = 'demo';
+    lastSync = null;
+    setPage('overview');
+    notify('Modo demonstração ativado. Estes jogos são exemplos.');
+  }
   if (action === 'export') exportBackup();
   if (action === 'import') document.getElementById('importFile').click();
   if (action === 'reset') {
@@ -428,3 +530,4 @@ setInterval(function() {
 
 updateTicketCount();
 setPage(state.activePage || 'overview');
+syncLiveData(false);
