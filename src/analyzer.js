@@ -9,6 +9,7 @@ function combinedOdd(selections) {
 }
 
 function combinedProbability(selections) {
+  if (!selections.length) return 0;
   return Number(selections.reduce((total, item) => total * (Number(item.confidence || 0) / 100), 1) * 100);
 }
 
