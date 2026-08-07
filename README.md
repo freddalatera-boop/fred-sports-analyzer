@@ -4,9 +4,9 @@ Aplicativo instalado para Windows, em português do Brasil, voltado à consulta 
 
 > Probabilidades não garantem resultados. Uso exclusivo para maiores de 18 anos.
 
-## Versão 0.2.0 — fonte real
+## Versão 0.2.1 — fonte real
 
-A versão 0.2.0 não apresenta jogos de exemplo como se fossem atuais. Sem uma fonte conectada, a tela fica vazia e informa claramente que a API precisa ser configurada.
+A versão 0.2.1 não apresenta jogos de exemplo como se fossem atuais. Sem uma fonte conectada, a tela fica vazia e informa claramente que a API precisa ser configurada.
 
 Para conectar:
 
