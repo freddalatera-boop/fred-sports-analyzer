@@ -52,5 +52,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "build-${{ github.run_number }}"\n          $installer = Get-ChildItem "dist\\*Setup*.exe" | Select-Object -First 1
+          $tag = "build-${{ github.run_number }}"
+          $installer = Get-ChildItem "dist\*Setup*.exe" | Select-Object -First 1
           gh release create $tag $installer.FullName --target "${{ github.sha }}" --title "Fred Sports Analyzer 0.2.0" --notes "Versão com integração segura à API-Sports para jogos e odds atuais."
