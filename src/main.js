@@ -1,8 +1,8 @@
 const { app, BrowserWindow, shell, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { apiGet } = require('./api-client');
 
-const API_BASE = 'https://v3.football.api-sports.io';
 const preferredBooks = /bet365|betano|sportingbet|kto|pixbet/i;
 
 function keyPath() {
@@ -24,21 +24,6 @@ function readApiKey() {
   } catch (_) {
     return '';
   }
-}
-
-async function apiGet(endpoint, key) {
-  const response = await fetch(API_BASE + endpoint, {
-    headers: { 'x-apisports-key': key }
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error('A fonte esportiva respondeu com erro ' + response.status + '.');
-  if (payload.errors && Object.keys(payload.errors).length) {
-    throw new Error(Object.values(payload.errors).join(' '));
-  }
-  return {
-    response: Array.isArray(payload.response) ? payload.response : [],
-    remaining: response.headers.get('x-ratelimit-requests-remaining')
-  };
 }
 
 function localDate(offset) {
@@ -103,13 +88,34 @@ async function syncSports() {
   const oddRows = [];
   let remaining = null;
 
-  for (const date of dates) {
-    const fixtures = await apiGet('/fixtures?date=' + date + '&timezone=America%2FSao_Paulo', key);
-    fixtureRows.push(...fixtures.response);
-    remaining = fixtures.remaining || remaining;
-    const odds = await apiGet('/odds?date=' + date + '&timezone=America%2FSao_Paulo', key);
-    oddRows.push(...odds.response);
-    remaining = odds.remaining || remaining;
+  const requests = dates.flatMap((date) => [
+    { type: 'fixtures', date, promise: apiGet('/fixtures?date=' + date + '&timezone=America%2FSao_Paulo', key) },
+    { type: 'odds', date, promise: apiGet('/odds?date=' + date + '&timezone=America%2FSao_Paulo', key) }
+  ]);
+  const results = await Promise.allSettled(requests.map((request) => request.promise));
+  const failures = [];
+  let fixtureSuccesses = 0;
+  let oddsSuccesses = 0;
+
+  results.forEach((result, index) => {
+    const request = requests[index];
+    if (result.status === 'rejected') {
+      failures.push({ type: request.type, date: request.date, message: result.reason && result.reason.message });
+      return;
+    }
+    if (request.type === 'fixtures') {
+      fixtureSuccesses += 1;
+      fixtureRows.push(...result.value.response);
+    } else {
+      oddsSuccesses += 1;
+      oddRows.push(...result.value.response);
+    }
+    remaining = result.value.remaining || remaining;
+  });
+
+  if (!fixtureSuccesses) {
+    const reason = failures.find((failure) => failure.type === 'fixtures');
+    throw new Error(reason && reason.message ? reason.message : 'Não foi possível carregar os jogos atuais.');
   }
 
   const oddsByFixture = new Map(oddRows.map((entry) => [String(entry.fixture && entry.fixture.id), entry]));
@@ -151,7 +157,12 @@ async function syncSports() {
     };
   });
 
-  return { games, updatedAt: new Date().toISOString(), remaining };
+  const warnings = [];
+  if (fixtureSuccesses < dates.length) warnings.push('Alguns jogos não puderam ser atualizados.');
+  if (!oddsSuccesses) warnings.push('A API não retornou as odds; os jogos foram carregados sem cotações.');
+  else if (oddsSuccesses < dates.length) warnings.push('Algumas odds não puderam ser atualizadas.');
+
+  return { games, updatedAt: new Date().toISOString(), remaining, warnings };
 }
 
 function registerIpc() {

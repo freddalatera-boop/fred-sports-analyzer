@@ -46,6 +46,7 @@ const demoGames = [
 let games = [];
 let sourceMode = 'unconfigured';
 let lastSync = null;
+let isSyncing = false;
 
 const STORAGE_KEY = 'fred-sports-analyzer-v1';
 const defaultState = {
@@ -55,10 +56,16 @@ const defaultState = {
   history: [],
   transactions: [{ id: 't0', type: 'Depósito inicial', value: 500, date: new Date().toISOString() }],
   limits: { maxStake: 50, dailyLoss: 100 },
+  liveCache: { games: [], updatedAt: null },
   activePage: 'overview'
 };
 
 let state = loadState();
+if (state.liveCache && Array.isArray(state.liveCache.games) && state.liveCache.games.length) {
+  games = state.liveCache.games;
+  lastSync = state.liveCache.updatedAt;
+  sourceMode = 'cached';
+}
 
 function loadState() {
   try {
@@ -118,7 +125,7 @@ function tagClass(confidence) {
 function gameCard(game, compact) {
   const inTicket = state.ticket.some(function(item) { return item.id === game.id; });
   const forms = game.homeForm && game.homeForm.length;
-  let marketHtml = '<div class="market-row"><div class="market-name"><strong>Odds não disponíveis</strong><span>A fonte não retornou um mercado compatível para este jogo.</span></div><div class="odd-box"><small>FONTE</small><strong style="font-size:11px">API</strong></div><div class="confidence"><small>STATUS</small><strong style="font-size:11px;color:var(--muted)">AGUARDANDO</strong></div><button class="btn small" disabled>Sem análise</button></div>';
+  let marketHtml = '<div class="market-row"><div class="market-name"><strong>Odds não disponíveis</strong><span>A fonte não retornou um mercado compatível para este jogo.</span></div><div class="odd-box"><small>FONTE</small><strong style="font-size:11px">API</strong></div><div class="confidence"><small>STATUS</small><strong style="font-size:11px;color:var(--muted)">SEM ODDS</strong></div><button class="btn small" disabled>Sem análise</button></div>';
   if (Number(game.odd) > 1) {
     marketHtml = '<div class="market-row">' +
       '<div class="market-name"><strong>' + e(game.market) + '</strong><span>Melhor cotação recebida: ' + e(game.bookmaker) + '</span></div>' +
@@ -153,6 +160,10 @@ function updateSourcePill() {
     pill.textContent = '● DADOS REAIS';
     pill.style.color = 'var(--green)';
     pill.style.borderColor = 'rgba(41,226,125,.38)';
+  } else if (sourceMode === 'cached') {
+    pill.textContent = '● ÚLTIMOS DADOS SALVOS';
+    pill.style.color = 'var(--yellow)';
+    pill.style.borderColor = 'rgba(255,202,72,.38)';
   } else if (sourceMode === 'demo') {
     pill.textContent = '● MODO DEMONSTRAÇÃO';
     pill.style.color = 'var(--yellow)';
@@ -166,6 +177,9 @@ function sourceBanner() {
   if (sourceMode === 'live') {
     return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da API-Sports. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.</div>';
   }
+  if (sourceMode === 'cached') {
+    return '<div class="warning-box" style="margin-bottom:18px"><strong>API temporariamente indisponível:</strong> mostrando os últimos dados salvos em ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'uma consulta anterior') + '.</div>';
+  }
   if (sourceMode === 'demo') {
     return '<div class="warning-box" style="margin-bottom:18px"><strong>Modo demonstração:</strong> os confrontos abaixo são exemplos e não representam os jogos atuais. Vá em Configurações para conectar a fonte real.</div>';
   }
@@ -173,12 +187,17 @@ function sourceBanner() {
 }
 
 async function syncLiveData(showMessage) {
+  if (isSyncing) {
+    if (showMessage) notify('A atualização já está em andamento. Aguarde até 20 segundos.', true);
+    return;
+  }
   if (!window.sportsApi) {
     sourceMode = 'unconfigured';
     games = [];
     setPage(state.activePage || 'overview');
     return;
   }
+  isSyncing = true;
   try {
     const status = await window.sportsApi.status();
     if (!status.configured) {
@@ -192,13 +211,28 @@ async function syncLiveData(showMessage) {
     games = Array.isArray(result.games) ? result.games : [];
     sourceMode = 'live';
     lastSync = result.updatedAt;
+    state.liveCache = { games: games, updatedAt: lastSync };
+    saveState();
     setPage(state.activePage || 'overview');
-    notify(games.length ? games.length + ' jogos atuais carregados.' : 'A fonte não retornou jogos futuros para hoje e amanhã.', !games.length);
+    const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+    const message = games.length ? games.length + ' jogos atuais carregados.' : 'A fonte não retornou jogos futuros para hoje e amanhã.';
+    notify(message + (warnings.length ? ' ' + warnings.join(' ') : ''), !games.length || warnings.length > 0);
   } catch (error) {
-    sourceMode = 'unconfigured';
-    games = [];
-    setPage(state.activePage || 'settings');
-    notify(error && error.message ? error.message : 'Não foi possível consultar a fonte esportiva.', true);
+    const cached = state.liveCache && Array.isArray(state.liveCache.games) ? state.liveCache.games : [];
+    if (cached.length) {
+      games = cached;
+      lastSync = state.liveCache.updatedAt;
+      sourceMode = 'cached';
+      setPage(state.activePage || 'overview');
+      notify((error && error.message ? error.message : 'A API não respondeu.') + ' Mostrando os últimos dados salvos.', true);
+    } else {
+      sourceMode = 'unconfigured';
+      games = [];
+      setPage(state.activePage || 'settings');
+      notify(error && error.message ? error.message : 'Não foi possível consultar a fonte esportiva.', true);
+    }
+  } finally {
+    isSyncing = false;
   }
 }
 
@@ -317,7 +351,8 @@ function transactionsTable() {
 }
 
 function renderSettings() {
-  return '<div class="panel" style="margin-bottom:18px"><div class="panel-header"><div><h2>Fonte esportiva real</h2><p>Jogos e odds atuais pela API-Sports.</p></div><span class="tag ' + (sourceMode === 'live' ? 'green' : 'yellow') + '">' + (sourceMode === 'live' ? 'CONECTADA' : 'NÃO CONFIGURADA') + '</span></div>' +
+  const connected = sourceMode === 'live' || sourceMode === 'cached';
+  return '<div class="panel" style="margin-bottom:18px"><div class="panel-header"><div><h2>Fonte esportiva real</h2><p>Jogos e odds atuais pela API-Sports.</p></div><span class="tag ' + (sourceMode === 'live' ? 'green' : 'yellow') + '">' + (sourceMode === 'live' ? 'CONECTADA' : connected ? 'CONECTADA — DADOS SALVOS' : 'NÃO CONFIGURADA') + '</span></div>' +
     '<div class="warning-box">Crie uma chave gratuita em <strong>dashboard.api-football.com</strong>. Ela será criptografada no Windows e nunca será enviada ao GitHub.</div>' +
     '<div class="field" style="margin-top:14px"><label>CHAVE API-SPORTS</label><input id="apiKey" class="input" type="password" autocomplete="off" placeholder="Cole sua chave aqui"></div>' +
     '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" data-action="save-api">Salvar e conectar</button><button class="btn" data-action="sync-api">Atualizar dados</button><button class="btn danger" data-action="clear-api">Desconectar</button><button class="btn" data-action="demo-source">Testar demonstração</button></div></div>' +
@@ -326,7 +361,7 @@ function renderSettings() {
 }
 
 function renderAbout() {
-  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.1</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.1 permite conectar a API-Sports com chave criptografada e não apresenta jogos demonstrativos como dados atuais.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
+  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.2</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.2 consulta a API em paralelo, limita o tempo de espera e preserva os últimos dados quando a fonte fica indisponível.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
 }
 
 function setPage(page) {

@@ -54,4 +54,4 @@ jobs:
         run: |
           $tag = "build-${{ github.run_number }}"
           $installer = Get-ChildItem "dist\*Setup*.exe" | Select-Object -First 1
-          gh release create $tag $installer.FullName --target "${{ github.sha }}" --title "Fred Sports Analyzer 0.2.1" --notes "Versão 0.2.1 completa, com campo para chave API-Sports e dados atuais."
+          gh release create $tag $installer.FullName --target "${{ github.sha }}" --title "Fred Sports Analyzer 0.2.2" --notes "Versão 0.2.2: consultas simultâneas, limite de espera, mensagens claras e últimos dados salvos."

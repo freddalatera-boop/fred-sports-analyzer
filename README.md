@@ -18,7 +18,7 @@ Para conectar:
 
 A chave é criptografada no próprio Windows e não é gravada neste repositório.
 
-O plano gratuito da API-Sports oferece 100 consultas por dia. O aplicativo consulta jogos e odds de hoje e amanhã. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
+O plano gratuito da API-Sports oferece 100 consultas por dia. O aplicativo consulta jogos e odds de hoje e amanhã simultaneamente. Cada tentativa tem limite de espera; quando a API falha, a versão 0.2.2 mostra uma mensagem clara e preserva os últimos jogos carregados. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
 
 ## Recursos
 
