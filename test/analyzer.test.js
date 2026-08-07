@@ -13,6 +13,7 @@ test('calcula odd combinada', () => {
 
 test('calcula confiança combinada', () => {
   assert.equal(combinedProbability([{ confidence: 80 }, { confidence: 50 }]), 40);
+  assert.equal(combinedProbability([]), 0);
 });
 
 test('classifica risco', () => {
