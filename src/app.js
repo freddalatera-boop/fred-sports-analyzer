@@ -89,6 +89,7 @@ function combinedOdd(items) {
 }
 
 function combinedConfidence(items) {
+  if (!items.length) return 0;
   return Number((items.reduce(function(total, item) {
     return total * (Number(item.confidence || 0) / 100);
   }, 1) * 100).toFixed(1));
@@ -289,6 +290,9 @@ function placeBet() {
   if (!state.ticket.length) return notify('Adicione pelo menos uma seleção.', true);
   if (!Number.isFinite(stake) || stake <= 0) return notify('Informe um valor válido.', true);
   if (stake > state.limits.maxStake) return notify('O valor ultrapassa seu limite por aposta de ' + money(state.limits.maxStake) + '.', true);
+  const today = new Date().toDateString();
+  const dailyExposure = state.history.filter(function(item) { return new Date(item.date).toDateString() === today && item.status !== 'Ganha'; }).reduce(function(total, item) { return total + item.stake; }, 0);
+  if (dailyExposure + stake > state.limits.dailyLoss) return notify('Este registro ultrapassa seu limite diário de perda de ' + money(state.limits.dailyLoss) + '.', true);
   if (stake > state.bank) return notify('Saldo insuficiente na banca.', true);
   const odd = combinedOdd(state.ticket);
   state.bank -= stake;
