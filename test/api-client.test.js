@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { apiGet, requestOnce, payloadError } = require('../src/api-client');
+const { apiGet, requestOnce, payloadError, buildOddsEndpoint } = require('../src/api-client');
 
 function jsonResponse(payload, status) {
   return {
@@ -64,4 +64,10 @@ test('traduz chave recusada mesmo quando a API responde com status 200', async (
 
 test('formata erros em objetos sem exibir object Object', () => {
   assert.equal(payloadError({ errors: { plan: { message: 'indisponível' } } }), '{"message":"indisponível"}');
+});
+
+test('monta endpoint de odds somente com parâmetros aceitos', () => {
+  const endpoint = buildOddsEndpoint('2026-08-08', 2);
+  assert.equal(endpoint, '/odds?date=2026-08-08&page=2');
+  assert.equal(endpoint.includes('timezone'), false);
 });

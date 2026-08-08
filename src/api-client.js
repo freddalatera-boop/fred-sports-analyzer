@@ -2,6 +2,12 @@ const API_BASE = 'https://v3.football.api-sports.io';
 const DEFAULT_TIMEOUT_MS = 18000;
 const DEFAULT_RETRIES = 1;
 
+function buildOddsEndpoint(date, page) {
+  const safeDate = encodeURIComponent(String(date || ''));
+  const safePage = Math.max(1, Number(page) || 1);
+  return '/odds?date=' + safeDate + '&page=' + safePage;
+}
+
 class SportsApiError extends Error {
   constructor(message, options) {
     super(message);
@@ -110,4 +116,4 @@ async function apiGet(endpoint, key, options) {
   throw lastError;
 }
 
-module.exports = { apiGet, requestOnce, SportsApiError, payloadError };
+module.exports = { apiGet, requestOnce, SportsApiError, payloadError, buildOddsEndpoint };

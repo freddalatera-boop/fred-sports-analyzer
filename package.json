@@ -1,6 +1,6 @@
 {
   "name": "fred-sports-analyzer",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Analisador esportivo explicável e controle de banca para Windows",
   "main": "src/main.js",
   "author": "Fred Assistência Técnica",

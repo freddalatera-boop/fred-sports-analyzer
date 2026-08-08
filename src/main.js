@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { apiGet } = require('./api-client');
+const { apiGet, buildOddsEndpoint } = require('./api-client');
 const { extractMarket } = require('./markets');
 
 function keyPath() {
@@ -34,8 +34,7 @@ function localDate(offset) {
 }
 
 async function fetchOddsPages(date, key) {
-  const base = '/odds?date=' + date + '&timezone=America%2FSao_Paulo';
-  const first = await apiGet(base + '&page=1', key);
+  const first = await apiGet(buildOddsEndpoint(date, 1), key);
   const totalPages = Math.max(1, Number(first.paging && first.paging.total) || 1);
   const pagesToLoad = Math.min(totalPages, 3);
   const rows = first.response.slice();
@@ -44,7 +43,7 @@ async function fetchOddsPages(date, key) {
 
   if (pagesToLoad > 1) {
     const extra = await Promise.allSettled(
-      Array.from({ length: pagesToLoad - 1 }, (_, index) => apiGet(base + '&page=' + (index + 2), key))
+      Array.from({ length: pagesToLoad - 1 }, (_, index) => apiGet(buildOddsEndpoint(date, index + 2), key))
     );
     extra.forEach((result) => {
       if (result.status === 'fulfilled') {
@@ -140,10 +139,25 @@ async function syncSports() {
 
   const warnings = [];
   if (fixtureSuccesses < dates.length) warnings.push('Alguns jogos não puderam ser atualizados.');
-  if (!oddsSuccesses) warnings.push('A API não retornou as odds; os jogos foram carregados sem cotações.');
+  if (!oddsSuccesses) {
+    const oddsFailure = failures.find((failure) => failure.type === 'odds');
+    warnings.push(oddsFailure && oddsFailure.message
+      ? 'Falha nas odds: ' + oddsFailure.message
+      : 'A API não retornou as odds; os jogos foram carregados sem cotações.');
+  }
   else if (oddsSuccesses < dates.length || oddsPageFailures) warnings.push('Algumas odds não puderam ser atualizadas.');
 
-  return { games, updatedAt: new Date().toISOString(), remaining, warnings };
+  const diagnostics = {
+    fixtures: upcoming.length,
+    oddFixtures: oddsByFixture.size,
+    analyzed: games.filter((game) => Number(game.odd) > 1).length,
+    remaining
+  };
+  if (oddsByFixture.size && !diagnostics.analyzed) {
+    warnings.push('A API enviou cotações, mas nenhum mercado compatível foi encontrado.');
+  }
+
+  return { games, updatedAt: new Date().toISOString(), remaining, warnings, diagnostics };
 }
 
 function registerIpc() {

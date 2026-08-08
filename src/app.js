@@ -47,6 +47,7 @@ let games = [];
 let sourceMode = 'unconfigured';
 let lastSync = null;
 let isSyncing = false;
+let lastDiagnostics = null;
 
 const STORAGE_KEY = 'fred-sports-analyzer-v1';
 const defaultState = {
@@ -56,7 +57,7 @@ const defaultState = {
   history: [],
   transactions: [{ id: 't0', type: 'Depósito inicial', value: 500, date: new Date().toISOString() }],
   limits: { maxStake: 50, dailyLoss: 100 },
-  liveCache: { games: [], updatedAt: null },
+  liveCache: { games: [], updatedAt: null, diagnostics: null },
   activePage: 'overview'
 };
 
@@ -64,6 +65,7 @@ let state = loadState();
 if (state.liveCache && Array.isArray(state.liveCache.games) && state.liveCache.games.length) {
   games = state.liveCache.games;
   lastSync = state.liveCache.updatedAt;
+  lastDiagnostics = state.liveCache.diagnostics || null;
   sourceMode = 'cached';
 }
 
@@ -175,7 +177,10 @@ function updateSourcePill() {
 
 function sourceBanner() {
   if (sourceMode === 'live') {
-    return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da API-Sports. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.</div>';
+    const details = lastDiagnostics
+      ? ' Jogos: ' + lastDiagnostics.fixtures + ' • com cotações: ' + lastDiagnostics.oddFixtures + ' • análises: ' + lastDiagnostics.analyzed + (lastDiagnostics.remaining != null ? ' • consultas restantes: ' + lastDiagnostics.remaining : '') + '.'
+      : '';
+    return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da API-Sports. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.' + details + '</div>';
   }
   if (sourceMode === 'cached') {
     return '<div class="warning-box" style="margin-bottom:18px"><strong>API temporariamente indisponível:</strong> mostrando os últimos dados salvos em ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'uma consulta anterior') + '.</div>';
@@ -211,7 +216,8 @@ async function syncLiveData(showMessage) {
     games = Array.isArray(result.games) ? result.games : [];
     sourceMode = 'live';
     lastSync = result.updatedAt;
-    state.liveCache = { games: games, updatedAt: lastSync };
+    lastDiagnostics = result.diagnostics || null;
+    state.liveCache = { games: games, updatedAt: lastSync, diagnostics: lastDiagnostics };
     saveState();
     setPage(state.activePage || 'overview');
     const warnings = Array.isArray(result.warnings) ? result.warnings : [];
@@ -222,6 +228,7 @@ async function syncLiveData(showMessage) {
     if (cached.length) {
       games = cached;
       lastSync = state.liveCache.updatedAt;
+      lastDiagnostics = state.liveCache.diagnostics || null;
       sourceMode = 'cached';
       setPage(state.activePage || 'overview');
       notify((error && error.message ? error.message : 'A API não respondeu.') + ' Mostrando os últimos dados salvos.', true);
@@ -361,7 +368,7 @@ function renderSettings() {
 }
 
 function renderAbout() {
-  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.3</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.3 consulta mais jogos com odds e reconhece mercados de resultado, dupla chance, gols, ambas marcam, escanteios e cartões.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
+  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.4</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.4 corrige a consulta de odds e mostra um diagnóstico com jogos, cotações, análises e limite restante.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
 }
 
 function setPage(page) {

@@ -4,9 +4,9 @@ Aplicativo instalado para Windows, em português do Brasil, voltado à consulta 
 
 > Probabilidades não garantem resultados. Uso exclusivo para maiores de 18 anos.
 
-## Versão 0.2.3 — fonte real
+## Versão 0.2.4 — fonte real
 
-A versão 0.2.3 consulta mais páginas de odds e reconhece mercados de resultado, dupla chance, gols, ambas marcam, gols por equipe, escanteios e cartões.
+A versão 0.2.4 corrige a consulta de odds, consulta mais páginas e mostra quantos jogos receberam cotações da API.
 
 Para conectar:
 
@@ -18,7 +18,7 @@ Para conectar:
 
 A chave é criptografada no próprio Windows e não é gravada neste repositório.
 
-O plano gratuito da API-Sports oferece 100 consultas por dia. O aplicativo consulta jogos e odds de hoje e amanhã simultaneamente. Cada tentativa tem limite de espera; quando a API falha, a versão 0.2.3 mostra uma mensagem clara e preserva os últimos jogos carregados. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
+O plano gratuito da API-Sports oferece 100 consultas por dia. O aplicativo consulta jogos e odds de hoje e amanhã simultaneamente. Cada tentativa tem limite de espera; quando a API falha, a versão 0.2.4 mostra uma mensagem clara e preserva os últimos jogos carregados. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
 
 ## Recursos
 
