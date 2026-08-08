@@ -76,7 +76,11 @@ async function requestOnce(endpoint, key, options) {
       response: Array.isArray(payload.response) ? payload.response : [],
       remaining: response.headers && response.headers.get
         ? response.headers.get('x-ratelimit-requests-remaining')
-        : null
+        : null,
+      paging: {
+        current: Number(payload.paging && payload.paging.current) || 1,
+        total: Number(payload.paging && payload.paging.total) || 1
+      }
     };
   } catch (error) {
     if (error && error.name === 'AbortError') {

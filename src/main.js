@@ -2,8 +2,7 @@ const { app, BrowserWindow, shell, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { apiGet } = require('./api-client');
-
-const preferredBooks = /bet365|betano|sportingbet|kto|pixbet/i;
+const { extractMarket } = require('./markets');
 
 function keyPath() {
   return path.join(app.getPath('userData'), 'sports-api-key.bin');
@@ -34,50 +33,30 @@ function localDate(offset) {
   return formatter.format(date);
 }
 
-function translateMarket(bet, value) {
-  const name = String(bet || '').toLowerCase();
-  const selection = String(value || '').toLowerCase();
-  if (name.includes('double chance')) {
-    if (selection.includes('home') && selection.includes('draw')) return 'Mandante ou empate';
-    if (selection.includes('away') && selection.includes('draw')) return 'Visitante ou empate';
-  }
-  if (name.includes('over') || name.includes('goals')) {
-    if (selection === 'over 1.5') return 'Mais de 1,5 gols';
-    if (selection === 'under 3.5') return 'Menos de 3,5 gols';
-  }
-  return '';
-}
+async function fetchOddsPages(date, key) {
+  const base = '/odds?date=' + date + '&timezone=America%2FSao_Paulo';
+  const first = await apiGet(base + '&page=1', key);
+  const totalPages = Math.max(1, Number(first.paging && first.paging.total) || 1);
+  const pagesToLoad = Math.min(totalPages, 3);
+  const rows = first.response.slice();
+  let remaining = first.remaining;
+  let partialFailures = 0;
 
-function extractMarket(oddEntry) {
-  if (!oddEntry) return null;
-  const candidates = [];
-  const allBooks = oddEntry.bookmakers || [];
-  const books = allBooks.filter((book) => preferredBooks.test(book.name || ''));
-  const selectedBooks = books.length ? books : allBooks;
-
-  for (const book of selectedBooks) {
-    for (const bet of book.bets || []) {
-      for (const value of bet.values || []) {
-        const label = translateMarket(bet.name, value.value);
-        const odd = Number(value.odd);
-        if (!label || !Number.isFinite(odd) || odd < 1.12 || odd > 2.2) continue;
-        candidates.push({ label, odd, bookmaker: book.name || 'Casa não identificada' });
+  if (pagesToLoad > 1) {
+    const extra = await Promise.allSettled(
+      Array.from({ length: pagesToLoad - 1 }, (_, index) => apiGet(base + '&page=' + (index + 2), key))
+    );
+    extra.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        rows.push(...result.value.response);
+        remaining = result.value.remaining || remaining;
+      } else {
+        partialFailures += 1;
       }
-    }
+    });
   }
 
-  if (!candidates.length) return null;
-  const grouped = new Map();
-  for (const item of candidates) {
-    const previous = grouped.get(item.label);
-    if (!previous || item.odd > previous.odd) grouped.set(item.label, item);
-  }
-  const options = Array.from(grouped.values()).map((item) => {
-    item.confidence = Math.max(1, Math.min(90, Math.round((100 / item.odd) * 0.94)));
-    return item;
-  }).filter((item) => item.confidence >= 50);
-
-  return options.sort((a, b) => b.confidence - a.confidence)[0] || null;
+  return { response: rows, remaining, partialFailures };
 }
 
 async function syncSports() {
@@ -90,12 +69,13 @@ async function syncSports() {
 
   const requests = dates.flatMap((date) => [
     { type: 'fixtures', date, promise: apiGet('/fixtures?date=' + date + '&timezone=America%2FSao_Paulo', key) },
-    { type: 'odds', date, promise: apiGet('/odds?date=' + date + '&timezone=America%2FSao_Paulo', key) }
+    { type: 'odds', date, promise: fetchOddsPages(date, key) }
   ]);
   const results = await Promise.allSettled(requests.map((request) => request.promise));
   const failures = [];
   let fixtureSuccesses = 0;
   let oddsSuccesses = 0;
+  let oddsPageFailures = 0;
 
   results.forEach((result, index) => {
     const request = requests[index];
@@ -108,6 +88,7 @@ async function syncSports() {
       fixtureRows.push(...result.value.response);
     } else {
       oddsSuccesses += 1;
+      oddsPageFailures += Number(result.value.partialFailures || 0);
       oddRows.push(...result.value.response);
     }
     remaining = result.value.remaining || remaining;
@@ -160,7 +141,7 @@ async function syncSports() {
   const warnings = [];
   if (fixtureSuccesses < dates.length) warnings.push('Alguns jogos não puderam ser atualizados.');
   if (!oddsSuccesses) warnings.push('A API não retornou as odds; os jogos foram carregados sem cotações.');
-  else if (oddsSuccesses < dates.length) warnings.push('Algumas odds não puderam ser atualizadas.');
+  else if (oddsSuccesses < dates.length || oddsPageFailures) warnings.push('Algumas odds não puderam ser atualizadas.');
 
   return { games, updatedAt: new Date().toISOString(), remaining, warnings };
 }

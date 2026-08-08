@@ -18,6 +18,7 @@ test('retorna dados e limite restante', async () => {
   });
   assert.deepEqual(result.response, [{ id: 1 }]);
   assert.equal(result.remaining, '88');
+  assert.deepEqual(result.paging, { current: 1, total: 1 });
 });
 
 test('traduz limite excedido para mensagem clara sem repetir', async () => {
