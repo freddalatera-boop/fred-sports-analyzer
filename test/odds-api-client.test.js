@@ -4,6 +4,8 @@ const {
   requestOnce,
   selectedBookmakers,
   extractOddsIoMarket,
+  responseRows,
+  bookmakerMarketCount,
   chunks
 } = require('../src/odds-api-client');
 
@@ -57,6 +59,36 @@ test('extrai resultado da partida quando não há totais', () => {
   });
   assert.equal(market.label, 'Vitória do mandante');
   assert.equal(market.odd, 1.55);
+});
+
+test('reconhece nomes alternativos e odds com vírgula', () => {
+  const market = extractOddsIoMarket({
+    bookmakers: {
+      Bet365: [{ name: 'Full Time Result', odds: [{ home: '1,72', draw: '3,50', away: '4,80' }] }]
+    }
+  });
+  assert.equal(market.label, 'Vitória do mandante');
+  assert.equal(market.odd, 1.72);
+});
+
+test('aceita bookmakers em lista e resposta de odds envelopada', () => {
+  const payload = {
+    events: [{
+      eventId: 77,
+      bookmakers: [{ name: 'KTO', markets: [{ name: 'Over/Under', odds: [{ hdp: 2.5, over: '1.90', under: '1.90' }] }] }]
+    }]
+  };
+  const rows = responseRows(payload);
+  assert.equal(rows[0].eventId, 77);
+  assert.equal(bookmakerMarketCount(rows[0]), 1);
+  assert.equal(extractOddsIoMarket(rows[0]).odd, 1.9);
+});
+
+test('mantém odds acima de 2,35 visíveis', () => {
+  const market = extractOddsIoMarket({
+    bookmakers: { Betano: [{ name: 'ML', odds: [{ home: '2.65', draw: '3.10', away: '2.80' }] }] }
+  });
+  assert.equal(market.odd, 2.65);
 });
 
 test('agrupa no máximo dez eventos por consulta', () => {

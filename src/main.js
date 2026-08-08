@@ -3,7 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const { apiGet, buildOddsEndpoint } = require('./api-client');
 const { extractMarket } = require('./markets');
-const { oddsApiGet, selectedBookmakers, extractOddsIoMarket, chunks } = require('./odds-api-client');
+const {
+  oddsApiGet, selectedBookmakers, extractOddsIoMarket, responseRows,
+  bookmakerMarketCount, chunks
+} = require('./odds-api-client');
 
 function keyPath() {
   return path.join(app.getPath('userData'), 'sports-api-key.bin');
@@ -229,12 +232,14 @@ async function syncOddsApiIo(key) {
   const eventEndpoint = '/events?sport=football&status=pending&from=' + encodeURIComponent(window.from) +
     '&to=' + encodeURIComponent(window.to) + '&limit=80';
   const eventResponse = await oddsApiGet(eventEndpoint, key);
-  const events = (Array.isArray(eventResponse.response) ? eventResponse.response : [])
+  const events = responseRows(eventResponse.response)
     .filter((event) => event && event.id && new Date(event.date).getTime() > Date.now())
     .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .slice(0, 80);
+    .slice(0, 60);
 
-  const withOdds = events.filter((event) => Number(event.bookmakerCount || 0) > 0);
+  // Nem todas as respostas incluem bookmakerCount. Consultar os eventos futuros
+  // diretamente evita descartar partidas que já possuem odds.
+  const withOdds = events;
   const batches = chunks(withOdds, 10);
   const oddsResults = await Promise.allSettled(batches.map((batch) => {
     const ids = batch.map((event) => event.id).join(',');
@@ -253,8 +258,11 @@ async function syncOddsApiIo(key) {
     }
     successfulBatches += 1;
     remaining = result.value.remaining || remaining;
-    const rows = Array.isArray(result.value.response) ? result.value.response : [];
-    rows.forEach((row) => oddsByEvent.set(String(row.id), row));
+    const rows = responseRows(result.value.response);
+    rows.forEach((row) => {
+      const eventId = row && (row.id != null ? row.id : row.eventId);
+      if (eventId != null && bookmakerMarketCount(row) > 0) oddsByEvent.set(String(eventId), row);
+    });
   });
 
   if (batches.length && !successfulBatches) {
@@ -270,10 +278,13 @@ async function syncOddsApiIo(key) {
     oddFixtures: oddsByEvent.size,
     analyzed: games.filter((game) => Number(game.odd) > 1).length,
     remaining,
-    bookmakers: bookmakers.join(', ')
+    bookmakers: bookmakers.join(', '),
+    marketsReceived: Array.from(oddsByEvent.values()).reduce((total, row) => total + bookmakerMarketCount(row), 0)
   };
   if (oddsByEvent.size && !diagnostics.analyzed) {
     warnings.push('A fonte enviou cotações, mas nenhum mercado compatível foi encontrado.');
+  } else if (!oddsByEvent.size && events.length) {
+    warnings.push('As casas selecionadas (' + bookmakers.join(', ') + ') não retornaram odds para os próximos jogos.');
   }
 
   return {

@@ -4,9 +4,9 @@ Aplicativo instalado para Windows, em português do Brasil, voltado à consulta 
 
 > Probabilidades não garantem resultados. Uso exclusivo para maiores de 18 anos.
 
-## Versão 0.2.5 — duas fontes com troca automática
+## Versão 0.2.6 — correção das odds da fonte alternativa
 
-A versão 0.2.5 adiciona a Odds-API.io como fonte preferencial de jogos e odds. Se ela falhar, o aplicativo tenta automaticamente a chave antiga da API-Sports. Os dados locais, a banca e o histórico das versões anteriores são preservados na atualização.
+A versão 0.2.6 adiciona a Odds-API.io como fonte preferencial de jogos e odds. Ela reconhece variações dos nomes de mercados, aceita diferentes formatos de resposta e consulta partidas mesmo quando a fonte não informa previamente o número de casas. Se a nova fonte falhar, o aplicativo tenta automaticamente a chave antiga da API-Sports. Os dados locais, a banca e o histórico das versões anteriores são preservados na atualização.
 
 Para conectar a nova fonte:
 

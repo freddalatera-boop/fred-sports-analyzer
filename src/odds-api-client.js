@@ -113,8 +113,8 @@ function decimalLine(value) {
 }
 
 function addCandidate(candidates, label, value, bookmaker) {
-  const odd = Number(value);
-  if (!label || !Number.isFinite(odd) || odd < 1.08 || odd > 2.35) return;
+  const odd = Number(String(value == null ? '' : value).replace(',', '.'));
+  if (!label || !Number.isFinite(odd) || odd <= 1 || odd > 50) return;
   candidates.push({
     label,
     odd,
@@ -128,7 +128,8 @@ function candidatesFromMarket(candidates, bookmaker, market) {
   const rows = Array.isArray(market && market.odds) ? market.odds : [];
 
   for (const row of rows) {
-    if (name === 'ml' || name === '1x2' || name.includes('moneyline')) {
+    if (name === 'ml' || name === '1x2' || name.includes('moneyline') ||
+        name.includes('match result') || name.includes('match winner') || name.includes('full time result')) {
       addCandidate(candidates, 'Vitória do mandante', row.home, bookmaker);
       addCandidate(candidates, 'Empate', row.draw, bookmaker);
       addCandidate(candidates, 'Vitória do visitante', row.away, bookmaker);
@@ -136,21 +137,27 @@ function candidatesFromMarket(candidates, bookmaker, market) {
     }
 
     if (name.includes('double chance')) {
-      addCandidate(candidates, 'Mandante ou empate', row.homeDraw || row.home_draw || row['1x'], bookmaker);
-      addCandidate(candidates, 'Visitante ou empate', row.drawAway || row.draw_away || row.x2, bookmaker);
+      addCandidate(candidates, 'Mandante ou empate', row.homeDraw || row.home_draw || row['1X'] || row['1x'], bookmaker);
+      addCandidate(candidates, 'Visitante ou empate', row.drawAway || row.draw_away || row.X2 || row.x2, bookmaker);
       addCandidate(candidates, 'Mandante ou visitante', row.homeAway || row.home_away || row['12'], bookmaker);
       continue;
     }
 
-    if (name.includes('both teams') && name.includes('score')) {
+    if ((name.includes('both teams') && name.includes('score')) || name === 'btts') {
       addCandidate(candidates, 'Ambas as equipes marcam', row.yes, bookmaker);
       addCandidate(candidates, 'Ambas as equipes não marcam', row.no, bookmaker);
       continue;
     }
 
     const line = Number(row.hdp);
-    if (!Number.isFinite(line)) continue;
-    if (name === 'totals' || name.includes('goals over/under')) {
+    if (!Number.isFinite(line)) {
+      addCandidate(candidates, 'Vitória do mandante', row.home, bookmaker);
+      addCandidate(candidates, 'Empate', row.draw, bookmaker);
+      addCandidate(candidates, 'Vitória do visitante', row.away, bookmaker);
+      continue;
+    }
+    if (name === 'totals' || name.includes('goals over/under') ||
+        (name.includes('over/under') && !name.includes('corner') && !name.includes('booking'))) {
       if (line >= 1.5 && line <= 4.5) {
         addCandidate(candidates, 'Mais de ' + decimalLine(line) + ' gols', row.over, bookmaker);
         addCandidate(candidates, 'Menos de ' + decimalLine(line) + ' gols', row.under, bookmaker);
@@ -171,6 +178,13 @@ function candidatesFromMarket(candidates, bookmaker, market) {
     } else if (name.includes('team total away')) {
       addCandidate(candidates, 'Visitante: mais de ' + decimalLine(line) + ' gols', row.over, bookmaker);
       addCandidate(candidates, 'Visitante: menos de ' + decimalLine(line) + ' gols', row.under, bookmaker);
+    } else if (row.over != null || row.under != null) {
+      addCandidate(candidates, 'Mais de ' + decimalLine(line) + ' gols', row.over, bookmaker);
+      addCandidate(candidates, 'Menos de ' + decimalLine(line) + ' gols', row.under, bookmaker);
+    } else if (row.home != null || row.draw != null || row.away != null) {
+      addCandidate(candidates, 'Vitória do mandante', row.home, bookmaker);
+      addCandidate(candidates, 'Empate', row.draw, bookmaker);
+      addCandidate(candidates, 'Vitória do visitante', row.away, bookmaker);
     }
   }
 }
@@ -178,7 +192,10 @@ function candidatesFromMarket(candidates, bookmaker, market) {
 function extractOddsIoMarket(eventOdds) {
   if (!eventOdds || !eventOdds.bookmakers || typeof eventOdds.bookmakers !== 'object') return null;
   const candidates = [];
-  for (const [bookmaker, markets] of Object.entries(eventOdds.bookmakers)) {
+  const entries = Array.isArray(eventOdds.bookmakers)
+    ? eventOdds.bookmakers.map((book) => [book.name || book.bookmaker || 'Casa não identificada', book.markets || book.bets || book.odds || []])
+    : Object.entries(eventOdds.bookmakers);
+  for (const [bookmaker, markets] of entries) {
     for (const market of Array.isArray(markets) ? markets : []) {
       candidatesFromMarket(candidates, bookmaker, market);
     }
@@ -193,11 +210,31 @@ function chunks(items, size) {
   return result;
 }
 
+function responseRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  const rows = payload.events || payload.data || payload.response || payload.results;
+  return Array.isArray(rows) ? rows : [];
+}
+
+function bookmakerMarketCount(eventOdds) {
+  if (!eventOdds || !eventOdds.bookmakers || typeof eventOdds.bookmakers !== 'object') return 0;
+  if (Array.isArray(eventOdds.bookmakers)) {
+    return eventOdds.bookmakers.reduce((total, book) => {
+      const markets = book && (book.markets || book.bets || book.odds);
+      return total + (Array.isArray(markets) ? markets.length : 0);
+    }, 0);
+  }
+  return Object.values(eventOdds.bookmakers).reduce((total, markets) => total + (Array.isArray(markets) ? markets.length : 0), 0);
+}
+
 module.exports = {
   oddsApiGet,
   requestOnce,
   OddsApiError,
   selectedBookmakers,
   extractOddsIoMarket,
+  responseRows,
+  bookmakerMarketCount,
   chunks
 };

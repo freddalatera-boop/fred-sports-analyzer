@@ -181,7 +181,10 @@ function updateSourcePill() {
 function sourceBanner() {
   if (sourceMode === 'live') {
     const details = lastDiagnostics
-      ? ' Jogos: ' + lastDiagnostics.fixtures + ' • com cotações: ' + lastDiagnostics.oddFixtures + ' • análises: ' + lastDiagnostics.analyzed + (lastDiagnostics.remaining != null ? ' • consultas restantes: ' + lastDiagnostics.remaining : '') + '.'
+      ? ' Jogos: ' + lastDiagnostics.fixtures + ' • com cotações: ' + lastDiagnostics.oddFixtures + ' • análises: ' + lastDiagnostics.analyzed +
+        (lastDiagnostics.marketsReceived != null ? ' • mercados recebidos: ' + lastDiagnostics.marketsReceived : '') +
+        (lastDiagnostics.bookmakers ? ' • casas: ' + lastDiagnostics.bookmakers : '') +
+        (lastDiagnostics.remaining != null ? ' • consultas restantes: ' + lastDiagnostics.remaining : '') + '.'
       : '';
     return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da ' + e(activeProvider || 'fonte conectada') + '. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.' + details + '</div>';
   }
@@ -413,7 +416,7 @@ function renderSettings() {
 }
 
 function renderAbout() {
-  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.5</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.5 adiciona a Odds-API.io e troca automaticamente de fonte quando uma delas estiver indisponível.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
+  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.6</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.6 corrige o reconhecimento das odds da fonte alternativa e amplia o diagnóstico recebido.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
 }
 
 function setPage(page) {
