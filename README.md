@@ -4,26 +4,27 @@ Aplicativo instalado para Windows, em português do Brasil, voltado à consulta 
 
 > Probabilidades não garantem resultados. Uso exclusivo para maiores de 18 anos.
 
-## Versão 0.2.4 — fonte real
+## Versão 0.2.5 — duas fontes com troca automática
 
-A versão 0.2.4 corrige a consulta de odds, consulta mais páginas e mostra quantos jogos receberam cotações da API.
+A versão 0.2.5 adiciona a Odds-API.io como fonte preferencial de jogos e odds. Se ela falhar, o aplicativo tenta automaticamente a chave antiga da API-Sports. Os dados locais, a banca e o histórico das versões anteriores são preservados na atualização.
 
-Para conectar:
+Para conectar a nova fonte:
 
-1. Crie uma conta gratuita em https://dashboard.api-football.com/register
-2. No painel da API-Sports, copie sua API Key.
+1. Crie uma conta gratuita em https://odds-api.io/
+2. No painel, escolha duas casas de apostas e copie sua API Key.
 3. Abra **Configurações** no Fred Sports Analyzer.
-4. Cole a chave em **Chave API-Sports**.
+4. Cole a chave em **Chave Odds-API.io**.
 5. Clique em **Salvar e conectar**.
 
-A chave é criptografada no próprio Windows e não é gravada neste repositório.
+As duas chaves são criptografadas no próprio Windows e não são gravadas neste repositório.
 
-O plano gratuito da API-Sports oferece 100 consultas por dia. O aplicativo consulta jogos e odds de hoje e amanhã simultaneamente. Cada tentativa tem limite de espera; quando a API falha, a versão 0.2.4 mostra uma mensagem clara e preserva os últimos jogos carregados. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
+O aplicativo consulta somente partidas futuras, agrupa até dez jogos por requisição de odds e preserva os últimos dados carregados quando as fontes falham. Quando uma odd não estiver disponível, ele mostra **Odds não disponíveis** em vez de criar um número fictício.
 
 ## Recursos
 
 - Jogos atuais e próximos por data real.
-- Odds disponíveis pela fonte conectada.
+- Odds disponíveis pela Odds-API.io ou API-Sports.
+- Troca automática entre as duas fontes.
 - Busca e filtro por competição.
 - Explicação da probabilidade implícita de mercado.
 - Montagem automática para odds-alvo.

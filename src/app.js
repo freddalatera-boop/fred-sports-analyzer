@@ -48,6 +48,8 @@ let sourceMode = 'unconfigured';
 let lastSync = null;
 let isSyncing = false;
 let lastDiagnostics = null;
+let activeProvider = null;
+let apiStatus = { configured: false, apiSportsConfigured: false, oddsApiConfigured: false };
 
 const STORAGE_KEY = 'fred-sports-analyzer-v1';
 const defaultState = {
@@ -66,6 +68,7 @@ if (state.liveCache && Array.isArray(state.liveCache.games) && state.liveCache.g
   games = state.liveCache.games;
   lastSync = state.liveCache.updatedAt;
   lastDiagnostics = state.liveCache.diagnostics || null;
+  activeProvider = state.liveCache.provider || null;
   sourceMode = 'cached';
 }
 
@@ -180,7 +183,7 @@ function sourceBanner() {
     const details = lastDiagnostics
       ? ' Jogos: ' + lastDiagnostics.fixtures + ' • com cotações: ' + lastDiagnostics.oddFixtures + ' • análises: ' + lastDiagnostics.analyzed + (lastDiagnostics.remaining != null ? ' • consultas restantes: ' + lastDiagnostics.remaining : '') + '.'
       : '';
-    return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da API-Sports. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.' + details + '</div>';
+    return '<div class="notice" style="margin:0 0 18px;display:block">Dados reais recebidos da ' + e(activeProvider || 'fonte conectada') + '. Última atualização: ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'agora') + '.' + details + '</div>';
   }
   if (sourceMode === 'cached') {
     return '<div class="warning-box" style="margin-bottom:18px"><strong>API temporariamente indisponível:</strong> mostrando os últimos dados salvos em ' + (lastSync ? new Date(lastSync).toLocaleString('pt-BR') : 'uma consulta anterior') + '.</div>';
@@ -205,6 +208,7 @@ async function syncLiveData(showMessage) {
   isSyncing = true;
   try {
     const status = await window.sportsApi.status();
+    apiStatus = status;
     if (!status.configured) {
       sourceMode = 'unconfigured';
       games = [];
@@ -217,7 +221,8 @@ async function syncLiveData(showMessage) {
     sourceMode = 'live';
     lastSync = result.updatedAt;
     lastDiagnostics = result.diagnostics || null;
-    state.liveCache = { games: games, updatedAt: lastSync, diagnostics: lastDiagnostics };
+    activeProvider = result.provider || null;
+    state.liveCache = { games: games, updatedAt: lastSync, diagnostics: lastDiagnostics, provider: activeProvider };
     saveState();
     setPage(state.activePage || 'overview');
     const warnings = Array.isArray(result.warnings) ? result.warnings : [];
@@ -257,13 +262,43 @@ async function saveApiKey() {
   }
 }
 
+async function saveOddsApiKey() {
+  const input = document.getElementById('oddsApiKey');
+  const key = input ? input.value.trim() : '';
+  if (!key) return notify('Cole a chave da Odds-API.io.', true);
+  try {
+    await window.sportsApi.saveOddsKey(key);
+    apiStatus = await window.sportsApi.status();
+    input.value = '';
+    notify('Segunda fonte salva com criptografia. Buscando jogos e odds...');
+    await syncLiveData(false);
+  } catch (error) {
+    notify(error && error.message ? error.message : 'Não foi possível salvar a nova chave.', true);
+  }
+}
+
 async function clearApiKey() {
   if (!window.sportsApi) return;
   await window.sportsApi.clearKey();
-  sourceMode = 'unconfigured';
-  games = [];
+  apiStatus = await window.sportsApi.status();
+  if (!apiStatus.configured) {
+    sourceMode = 'unconfigured';
+    games = [];
+  }
   setPage('settings');
-  notify('Fonte desconectada.');
+  notify('API-Sports desconectada.');
+}
+
+async function clearOddsApiKey() {
+  if (!window.sportsApi) return;
+  await window.sportsApi.clearOddsKey();
+  apiStatus = await window.sportsApi.status();
+  if (!apiStatus.configured) {
+    sourceMode = 'unconfigured';
+    games = [];
+  }
+  setPage('settings');
+  notify('Odds-API.io desconectada.');
 }
 
 function renderOverview() {
@@ -274,7 +309,7 @@ function renderOverview() {
   return sourceBanner() + '<div class="hero"><div><p class="eyebrow">ANÁLISE EXPLICÁVEL</p><h2>Boa leitura vale mais que palpite.</h2><p>Compare informações, veja os riscos e monte bilhetes com critérios claros. Quando a fonte está conectada, jogos e cotações são carregados pela data atual.</p></div><div class="hero-actions"><button class="btn primary" data-go="games">Ver jogos do dia</button><button class="btn" data-action="auto" data-target="3">Montar odd 3</button></div></div>' +
     '<div class="stats-grid">' +
       statCard('Banca atual', money(state.bank), 'Salva neste computador') +
-      statCard('Jogos carregados', String(games.length), sourceMode === 'live' ? 'Fonte API-Sports' : 'Sem fonte real') +
+      statCard('Jogos carregados', String(games.length), sourceMode === 'live' ? 'Fonte ' + (activeProvider || 'conectada') : 'Sem fonte real') +
       statCard('Taxa de acerto', pct(hitRate), settled.length + ' apostas finalizadas') +
       statCard('Apostas pendentes', String(pending), 'Acompanhe no histórico') +
     '</div>' +
@@ -358,17 +393,27 @@ function transactionsTable() {
 }
 
 function renderSettings() {
-  const connected = sourceMode === 'live' || sourceMode === 'cached';
-  return '<div class="panel" style="margin-bottom:18px"><div class="panel-header"><div><h2>Fonte esportiva real</h2><p>Jogos e odds atuais pela API-Sports.</p></div><span class="tag ' + (sourceMode === 'live' ? 'green' : 'yellow') + '">' + (sourceMode === 'live' ? 'CONECTADA' : connected ? 'CONECTADA — DADOS SALVOS' : 'NÃO CONFIGURADA') + '</span></div>' +
-    '<div class="warning-box">Crie uma chave gratuita em <strong>dashboard.api-football.com</strong>. Ela será criptografada no Windows e nunca será enviada ao GitHub.</div>' +
-    '<div class="field" style="margin-top:14px"><label>CHAVE API-SPORTS</label><input id="apiKey" class="input" type="password" autocomplete="off" placeholder="Cole sua chave aqui"></div>' +
-    '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" data-action="save-api">Salvar e conectar</button><button class="btn" data-action="sync-api">Atualizar dados</button><button class="btn danger" data-action="clear-api">Desconectar</button><button class="btn" data-action="demo-source">Testar demonstração</button></div></div>' +
+  const sportsTag = apiStatus.apiSportsConfigured ? '<span class="tag green">CONFIGURADA</span>' : '<span class="tag yellow">NÃO CONFIGURADA</span>';
+  const oddsTag = apiStatus.oddsApiConfigured ? '<span class="tag green">CONFIGURADA — PREFERENCIAL</span>' : '<span class="tag yellow">NÃO CONFIGURADA</span>';
+  return '<div class="panel" style="margin-bottom:18px"><div class="panel-header"><div><h2>Fontes esportivas reais</h2><p>A nova fonte é usada primeiro; se falhar, o programa tenta automaticamente a API-Sports.</p></div><button class="btn primary" data-action="sync-api">Atualizar dados agora</button></div>' +
+    '<div class="source-grid">' +
+      '<section class="source-card preferred"><div class="panel-header"><div><h3>Odds-API.io</h3><p>Fonte preferencial para jogos e cotações.</p></div>' + oddsTag + '</div>' +
+        '<div class="warning-box">Crie a chave gratuita e escolha duas casas no painel da <strong>Odds-API.io</strong>. A chave fica criptografada somente neste computador.</div>' +
+        '<div class="field" style="margin-top:14px"><label>CHAVE ODDS-API.IO</label><input id="oddsApiKey" class="input" type="password" autocomplete="off" placeholder="Cole a nova chave aqui"></div>' +
+        '<div class="source-actions"><button class="btn primary" data-action="save-odds-api">Salvar e conectar</button><a class="btn" href="https://odds-api.io/" target="_blank" rel="noreferrer">Criar chave gratuita</a><button class="btn danger" data-action="clear-odds-api">Desconectar</button></div>' +
+      '</section>' +
+      '<section class="source-card"><div class="panel-header"><div><h3>API-Sports</h3><p>Fonte de reserva mantida no programa.</p></div>' + sportsTag + '</div>' +
+        '<div class="warning-box">Sua chave antiga continua funcionando. Quando o limite dela acabar, a Odds-API.io será usada automaticamente.</div>' +
+        '<div class="field" style="margin-top:14px"><label>CHAVE API-SPORTS</label><input id="apiKey" class="input" type="password" autocomplete="off" placeholder="Cole sua chave antiga aqui"></div>' +
+        '<div class="source-actions"><button class="btn" data-action="save-api">Salvar API-Sports</button><button class="btn danger" data-action="clear-api">Desconectar</button></div>' +
+      '</section>' +
+    '</div><div style="margin-top:12px"><button class="btn" data-action="demo-source">Testar demonstração</button></div></div>' +
     '<div class="split"><div class="panel"><div class="panel-header"><div><h2>Limites responsáveis</h2><p>O sistema impede valores acima dos limites definidos.</p></div></div><div class="form-grid"><div class="field"><label>LIMITE POR APOSTA</label><input id="maxStake" class="input" type="number" min="1" value="' + state.limits.maxStake + '"></div><div class="field"><label>LIMITE DIÁRIO DE PERDA</label><input id="dailyLoss" class="input" type="number" min="1" value="' + state.limits.dailyLoss + '"></div></div><button class="btn primary" style="margin-top:14px" data-action="save-limits">Salvar limites</button></div>' +
     '<aside class="panel"><div class="panel-header"><div><h3>Backup dos dados</h3><p>Leve seu histórico para outro computador.</p></div></div><button class="btn" style="width:100%;margin-bottom:9px" data-action="export">Exportar backup</button><button class="btn" style="width:100%;margin-bottom:9px" data-action="import">Importar backup</button><button class="btn danger" style="width:100%" data-action="reset">Apagar dados locais</button></aside></div>';
 }
 
 function renderAbout() {
-  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.4</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.4 corrige a consulta de odds e mostra um diagnóstico com jogos, cotações, análises e limite restante.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
+  return '<div class="panel" style="max-width:780px"><div class="about-logo">F</div><p class="eyebrow">VERSÃO 0.2.5</p><h2>Fred Sports Analyzer</h2><p style="color:var(--muted);line-height:1.65">Aplicativo para organizar informações esportivas, comparar evidências e controlar apostas. A versão 0.2.5 adiciona a Odds-API.io e troca automaticamente de fonte quando uma delas estiver indisponível.</p><div class="warning-box"><strong>Importante:</strong> nenhuma análise garante resultado ou lucro. Odds representam probabilidades e incluem a margem das casas. Use somente se tiver 18 anos ou mais e mantenha limites compatíveis com sua realidade financeira.</div><h3 style="margin-top:22px">Princípios do aplicativo</h3><ul class="evidence"><li>Explicar todos os fatores usados.</li><li>Mostrar dados ausentes sem inventar informações.</li><li>Alertar sobre escalações pendentes e odds desatualizadas.</li><li>Priorizar casas autorizadas e endereços .bet.br.</li></ul></div>';
 }
 
 function setPage(page) {
@@ -524,8 +569,10 @@ document.getElementById('page').addEventListener('click', function(event) {
     } else notify('Informe limites maiores que zero.', true);
   }
   if (action === 'save-api') saveApiKey();
+  if (action === 'save-odds-api') saveOddsApiKey();
   if (action === 'sync-api') syncLiveData(true);
   if (action === 'clear-api') clearApiKey();
+  if (action === 'clear-odds-api') clearOddsApiKey();
   if (action === 'demo-source') {
     games = demoGames;
     sourceMode = 'demo';
